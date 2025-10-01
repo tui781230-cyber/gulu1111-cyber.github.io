@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>產品成分標示｜咕嚕咕嚕糧</title>
+  <meta name="description" content="掃描後查看產品成分標示，支援全螢幕垂直滾動與無限循環。">
+  <style>
+    :root{
+      --bg:#111;       /* 背景（黑底能讓圖片更聚焦） */
+      --brand:#2d7c5b; /* 品牌綠：用於微小元素 */
+    }
+    /* 讓整頁用 100vh 的滾動容器 */
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      overscroll-behavior-y: contain; /* 避免 iOS/Android 邊緣回彈卡頓 */
+    }
+    .viewer{
+      position:fixed;
+      inset:0;
+      overflow-y:auto;
+      scroll-snap-type:y mandatory;  /* 垂直強制貼齊 */
+      -webkit-overflow-scrolling:touch;
+    }
+    .slide{
+      height:100vh;                 /* 每張滑塊滿版 */
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      scroll-snap-align:start;      /* 到達視窗頂就貼齊 */
+      background:#000;              /* 圖外區塊顯示黑底 */
+    }
+    .slide img{
+      width:100%;
+      height:100%;
+      object-fit:contain;           /* 不裁切，完整顯示 */
+      display:block;
+      user-select:none;
+      -webkit-user-drag:none;
+    }
+
+    /* 右下角小圓點指示（可選） */
+    .dots{
+      position:fixed; right:10px; bottom:12px; z-index:10;
+      display:flex; flex-direction:column; gap:6px;
+    }
+    .dot{
+      width:8px; height:8px; border-radius:50%;
+      background:rgba(255,255,255,.35);
+      transition:.2s;
+    }
+    .dot.active{ background:#fff; transform:scale(1.3); }
+
+    /* 顯示目前張數（可選） */
+    .badge{
+      position:fixed; left:12px; bottom:12px; z-index:10;
+      color:#fff; font-size:12px; padding:6px 10px;
+      background:rgba(0,0,0,.45); border-radius:999px;
+      border:1px solid rgba(255,255,255,.15);
+      backdrop-filter: blur(6px);
+    }
+  </style>
+</head>
+<body>
+  <!-- 滾動容器（會在 JS 裡自動加上頭尾複製，用來做無限循環） -->
+  <div id="viewer" class="viewer">
+    <!-- 真實 1~7，JS 會自動在最前面插入「7的複製」，最後插入「1的複製」 -->
+    <section class="slide"><img src="1.png" alt="圖 1"></section>
+    <section class="slide"><img src="2.png" alt="圖 2"></section>
+    <section class="slide"><img src="3.png" alt="圖 3"></section>
+    <section class="slide"><img src="4.png" alt="圖 4"></section>
+    <section class="slide"><img src="5.png" alt="圖 5"></section>
+    <section class="slide"><img src="6.png" alt="圖 6"></section>
+    <section class="slide"><img src="7.png" alt="圖 7"></section>
+  </div>
+
+  <!-- 指示器（可刪） -->
+  <div id="dots" class="dots" aria-hidden="true"></div>
+  <div id="badge" class="badge">1 / 7</div>
+
+  <script>
+    // ===== 可調整設定 =====
+    const TOTAL = 7;                 // 總張數
+    const SELECTOR = '.slide';       // 單張選擇器
+    // =====================
+
+    const viewer = document.getElementById('viewer');
+
+    // 1) 做無限循環：在最前插入「最後一張的複製」、最後插入「第一張的複製」
+    function makeInfinite() {
+      const slides = Array.from(viewer.querySelectorAll(SELECTOR));
+      const first = slides[0].cloneNode(true);
+      const last  = slides[slides.length - 1].cloneNode(true);
+      viewer.insertBefore(last, slides[0]);     // [clone-last] 1 2 3 ... 7
+      viewer.appendChild(first);                // [clone-last] 1 ... 7 [clone-first]
+      // 初始定位到真正的第一張（索引 1 的位置）
+      setTimeout(() => {
+        viewer.scrollTo({ top: innerHeight, behavior: 'instant' });
+      }, 0);
+    }
+
+    // 2) 監聽滾動：若滾到頂（clone-last），瞬移到真正最後一張；若到底（clone-first），瞬移到真正第一張。
+    function bindLoopScroll() {
+      let ticking = false;
+      viewer.addEventListener('scroll', () => {
+        if (ticking) return;
+        window.requestAnimationFrame(() => {
+          const y = viewer.scrollTop;
+          const h = window.innerHeight;
+
+          // 目前是第幾「格」
+          const idx = Math.round(y / h); // 0 是 clone-last, 1..TOTAL 是真實, TOTAL+1 是 clone-first
+
+          // 到頂：跳到最後一張
+          if (idx === 0) {
+            viewer.scrollTo({ top: TOTAL * h, behavior: 'instant' });
+            updateIndicators(TOTAL);
+          }
+          // 到底：跳回第一張
+          else if (idx === TOTAL + 1) {
+            viewer.scrollTo({ top: 1 * h, behavior: 'instant' });
+            updateIndicators(1);
+          } else {
+            updateIndicators(idx);
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }, { passive: true });
+    }
+
+    // 3) 指示器：右下角 7 個小點 + 左下角 1/7
+    function buildDots() {
+      const box = document.getElementById('dots');
+      for (let i = 1; i <= TOTAL; i++) {
+        const d = document.createElement('div');
+        d.className = 'dot' + (i === 1 ? ' active' : '');
+        box.appendChild(d);
+      }
+    }
+    function updateIndicators(realIndex) {
+      // realIndex: 1..TOTAL
+      const badge = document.getElementById('badge');
+      badge.textContent = `${realIndex} / ${TOTAL}`;
+      const dots = Array.from(document.querySelectorAll('.dot'));
+      dots.forEach((d, i) => d.classList.toggle('active', i + 1 === realIndex));
+    }
+
+    // 4) 輔助：支援鍵盤上下、滑鼠滾輪一頁一張（可選）
+    function bindOnePageStep() {
+      let lock = false;
+      function step(dir){ // dir=1 往下、-1 往上
+        if (lock) return;
+        lock = true;
+        const h = innerHeight;
+        const target = Math.round(viewer.scrollTop / h) * h + dir * h;
+        viewer.scrollTo({ top: target, behavior: 'smooth' });
+        setTimeout(()=> lock=false, 280);
+      }
+      // 鍵盤
+      window.addEventListener('keydown', e=>{
+        if (e.key === 'ArrowDown' || e.key === 'PageDown') step(1);
+        if (e.key === 'ArrowUp'   || e.key === 'PageUp')   step(-1);
+      });
+      // 滑鼠滾輪（避免一次滾太多）
+      viewer.addEventListener('wheel', e=>{
+        if (Math.abs(e.deltaY) < 20) return;
+        step(e.deltaY > 0 ? 1 : -1);
+        e.preventDefault();
+      }, { passive:false });
+    }
+
+    // iOS Safari 對 scrollTo({behavior:'instant'}) 不支援：做個 polyfill
+    (()=>{
+      const _scrollTo = Element.prototype.scrollTo;
+      Element.prototype.scrollTo = function(opts){
+        if (typeof opts === 'object' && opts.behavior === 'instant') {
+          this.scrollTop = opts.top || 0;
+          this.scrollLeft = opts.left || 0;
+          return;
+        }
+        return _scrollTo.apply(this, arguments);
+      }
+    })();
+
+    // 啟動
+    buildDots();
+    makeInfinite();
+    bindLoopScroll();
+    bindOnePageStep();
+  </script>
+</body>
+</html>
