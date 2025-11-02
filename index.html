@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>產品成分標示｜咕嚕咕嚕糧</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #111;
+      color: #fff;
+      font-family: "Noto Sans TC", sans-serif;
+      overscroll-behavior-y: contain;
+    }
+    .viewer {
+      position: fixed;
+      inset: 0;
+      overflow-y: auto;
+      scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    .slide {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      scroll-snap-align: start;
+      background: #000;
+    }
+    .slide img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    .dots {
+      position: fixed; right: 10px; bottom: 14px; z-index: 10;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,.3);
+      transition: .2s;
+    }
+    .dot.active { background: #fff; transform: scale(1.3); }
+    .badge {
+      position: fixed; left: 12px; bottom: 12px; z-index: 10;
+      color: #fff; font-size: 12px; padding: 6px 10px;
+      background: rgba(0,0,0,.45); border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.15);
+      backdrop-filter: blur(6px);
+    }
+  </style>
+</head>
+<body>
+  <div id="viewer" class="viewer">
+    <!-- 1~10 張圖片 -->
+    <section class="slide"><img src="1.png" alt="圖1"></section>
+    <section class="slide"><img src="2.png" alt="圖2"></section>
+    <section class="slide"><img src="3.png" alt="圖3"></section>
+    <section class="slide"><img src="4.png" alt="圖4"></section>
+    <section class="slide"><img src="5.png" alt="圖5"></section>
+    <section class="slide"><img src="6.png" alt="圖6"></section>
+    <section class="slide"><img src="7.png" alt="圖7"></section>
+    <section class="slide"><img src="8.png" alt="圖8"></section>
+    <section class="slide"><img src="9.png" alt="圖9"></section>
+    <section class="slide"><img src="10.png" alt="圖10"></section>
+  </div>
+
+  <div id="dots" class="dots"></div>
+  <div id="badge" class="badge">1 / 10</div>
+
+  <script>
+    const TOTAL = 10;
+    const viewer = document.getElementById('viewer');
+
+    // 建立循環滾動（首尾相接）
+    function makeInfinite() {
+      const slides = Array.from(viewer.children);
+      const first = slides[0].cloneNode(true);
+      const last = slides[slides.length - 1].cloneNode(true);
+      viewer.insertBefore(last, slides[0]);
+      viewer.appendChild(first);
+      setTimeout(() => viewer.scrollTo({ top: innerHeight, behavior: 'instant' }), 0);
+    }
+
+    // 監聽滾動位置
+    function bindLoopScroll() {
+      let ticking = false;
+      viewer.addEventListener('scroll', () => {
+        if (ticking) return;
+        requestAnimationFrame(() => {
+          const y = viewer.scrollTop;
+          const h = innerHeight;
+          const idx = Math.round(y / h);
+          if (idx === 0) viewer.scrollTo({ top: TOTAL * h, behavior: 'instant' });
+          else if (idx === TOTAL + 1) viewer.scrollTo({ top: h, behavior: 'instant' });
+          updateIndicators(((idx - 1 + TOTAL) % TOTAL) + 1);
+          ticking = false;
+        });
+        ticking = true;
+      });
+    }
+
+    // 頁數與圓點
+    function buildDots() {
+      const dots = document.getElementById('dots');
+      for (let i = 1; i <= TOTAL; i++) {
+        const d = document.createElement('div');
+        d.className = 'dot' + (i === 1 ? ' active' : '');
+        dots.appendChild(d);
+      }
+    }
+    function updateIndicators(i) {
+      document.getElementById('badge').textContent = `${i} / ${TOTAL}`;
+      document.querySelectorAll('.dot').forEach((d, n) => d.classList.toggle('active', n + 1 === i));
+    }
+
+    // Polyfill：立刻滾動
+    (function(){
+      const _scrollTo = Element.prototype.scrollTo;
+      Element.prototype.scrollTo = function(opts){
+        if (typeof opts === 'object' && opts.behavior === 'instant') {
+          this.scrollTop = opts.top || 0;
+          return;
+        }
+        return _scrollTo.apply(this, arguments);
+      }
+    })();
+
+    buildDots();
+    makeInfinite();
+    bindLoopScroll();
+  </script>
+</body>
+</html>
+<!-- rebuild -->
